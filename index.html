@@ -13,22 +13,12 @@
     <meta name="theme-color" content="#22d3ee">
 
     <style>
-        body {
-            font-family: 'Sarabun', 'Inter', sans-serif;
-            -webkit-tap-highlight-color: transparent;
-        }
-        .digital-clock {
-            font-family: 'Inter', sans-serif;
-        }
-        .btn-disabled {
-            background-color: #4b5563;
-            cursor: not-allowed;
-            opacity: 0.7;
-        }
-        .input-invalid {
-            border-color: #f43f5e;
-            box-shadow: 0 0 0 2px #f43f5e;
-        }
+        body { font-family: 'Sarabun', 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        .digital-clock { font-family: 'Inter', sans-serif; }
+        .btn-disabled { background-color: #4b5563; cursor: not-allowed; opacity: 0.7; }
+        .input-invalid { border-color: #f43f5e; box-shadow: 0 0 0 2px #f43f5e; }
+        .spinner { border-top-color: transparent; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
     </style>
 </head>
 <body class="bg-gray-900 text-white min-h-screen flex flex-col items-center p-4">
@@ -59,13 +49,14 @@
 
             <!-- Action Buttons -->
             <div class="grid grid-cols-2 gap-4">
-                <button id="checkin-btn" class="w-full text-lg font-bold py-4 px-6 rounded-lg transition-transform transform active:scale-95 btn-disabled" disabled>
-                    ลงเวลาเข้า
+                <button id="checkin-btn" class="w-full text-lg font-bold py-4 px-6 rounded-lg transition-transform transform active:scale-95 btn-disabled flex items-center justify-center" disabled>
+                    <span class="btn-text">ลงเวลาเข้า</span>
                 </button>
-                <button id="checkout-btn" class="w-full text-lg font-bold py-4 px-6 rounded-lg transition-transform transform active:scale-95 btn-disabled" disabled>
-                    ลงเวลาออก
+                <button id="checkout-btn" class="w-full text-lg font-bold py-4 px-6 rounded-lg transition-transform transform active:scale-95 btn-disabled flex items-center justify-center" disabled>
+                    <span class="btn-text">ลงเวลาออก</span>
                 </button>
             </div>
+             <p id="error-message" class="text-red-400 text-xs mt-4 h-4"></p>
         </div>
     </main>
 
@@ -92,6 +83,7 @@
 
     <script>
         // --- Constants and State ---
+        const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwzNzlplN9wGJPpUks5txjlQJwdsPRW_0IkFIJWtit-gXWrSjQx6PtAYIOcsQSgOa9D/exec'; // !!! วาง URL ของคุณที่นี่ !!!
         const SHOP_LOCATION = { latitude: 18.86408, longitude: 99.12597 }; 
         const MAX_DISTANCE_METERS = 100;
 
@@ -107,6 +99,7 @@
         const currentDateEl = document.getElementById('current-date');
         const permissionFooter = document.getElementById('permission-footer');
         const requestPermissionBtn = document.getElementById('request-permission-btn');
+        const errorMessageEl = document.getElementById('error-message');
 
         let appState = {
             userName: '',
@@ -115,112 +108,34 @@
         };
         
         // --- Functions ---
-        function updateClock() {
-            const now = new Date();
-            currentTimeEl.textContent = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-            currentDateEl.textContent = now.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-        }
-
-        function haversineDistance(coords1, coords2) {
-            function toRad(x) { return x * Math.PI / 180; }
-            const R = 6371;
-            const dLat = toRad(coords2.latitude - coords1.latitude);
-            const dLon = toRad(coords2.longitude - coords1.longitude);
-            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(toRad(coords1.latitude)) * Math.cos(toRad(coords2.latitude)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
-            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c * 1000;
-        }
+        function updateClock() { /* ... same as before ... */ }
+        function haversineDistance(coords1, coords2) { /* ... same as before ... */ }
+        function showPermissionUI() { /* ... same as before ... */ }
+        function hidePermissionUI() { /* ... same as before ... */ }
+        function updateLocationStatus(position) { /* ... same as before ... */ }
+        function locationError(error) { /* ... same as before ... */ }
+        function updateButtonState() { /* ... same as before ... */ }
+        function renderHistory() { /* ... same as before ... */ }
+        function saveState() { /* ... same as before ... */ }
+        function loadState() { /* ... same as before ... */ }
         
-        function showPermissionUI() {
-            permissionFooter.classList.remove('hidden');
-            locationStatusEl.textContent = '❌ ถูกปฏิเสธการเข้าถึง';
-            locationStatusEl.classList.add('text-red-400');
-        }
-
-        function hidePermissionUI() {
-            permissionFooter.classList.add('hidden');
-        }
-
-        function updateLocationStatus(position) {
-            hidePermissionUI();
-            const userCoords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
-            const distance = haversineDistance(userCoords, SHOP_LOCATION);
-            distanceStatusEl.textContent = `${distance.toFixed(0)} เมตร`;
-
-            if (distance <= MAX_DISTANCE_METERS) {
-                appState.isWithinRange = true;
-                locationStatusEl.textContent = `✅ อยู่ในรัศมีที่กำหนด`;
-                locationStatusEl.classList.add('text-green-400');
-                locationStatusEl.classList.remove('text-red-400');
+        function setButtonLoading(button, isLoading) {
+            const btnText = button.querySelector('.btn-text');
+            if (isLoading) {
+                btnText.textContent = 'กำลังส่ง...';
+                button.disabled = true;
+                const spinner = document.createElement('div');
+                spinner.className = 'spinner w-5 h-5 border-2 border-white rounded-full ml-2';
+                button.appendChild(spinner);
             } else {
-                appState.isWithinRange = false;
-                locationStatusEl.textContent = `❌ อยู่นอกรัศมีที่กำหนด`;
-                locationStatusEl.classList.add('text-red-400');
-                locationStatusEl.classList.remove('text-green-400');
-            }
-            updateButtonState();
-        }
-
-        function locationError(error) {
-            appState.isWithinRange = false;
-            distanceStatusEl.textContent = '- เมตร';
-            if (error.code === error.PERMISSION_DENIED) {
-                showPermissionUI();
-            } else {
-                locationStatusEl.textContent = 'ไม่สามารถหาตำแหน่งได้';
-            }
-            updateButtonState();
-        }
-        
-        function updateButtonState() {
-            if (appState.isWithinRange) {
-                checkinBtn.disabled = false;
-                checkoutBtn.disabled = false;
-                checkinBtn.classList.remove('btn-disabled');
-                checkoutBtn.classList.remove('btn-disabled');
-                checkinBtn.classList.add('bg-cyan-500', 'hover:bg-cyan-600');
-                checkoutBtn.classList.add('bg-rose-500', 'hover:bg-rose-600');
-            } else {
-                checkinBtn.disabled = true;
-                checkoutBtn.disabled = true;
-                checkinBtn.classList.add('btn-disabled');
-                checkoutBtn.classList.add('btn-disabled');
-                checkinBtn.classList.remove('bg-cyan-500', 'hover:bg-cyan-600');
-                checkoutBtn.classList.remove('bg-rose-500', 'hover:bg-rose-600');
+                btnText.textContent = button.id === 'checkin-btn' ? 'ลงเวลาเข้า' : 'ลงเวลาออก';
+                button.disabled = false;
+                const spinner = button.querySelector('.spinner');
+                if (spinner) button.removeChild(spinner);
             }
         }
-        
-        function renderHistory() {
-            if (appState.history.length === 0) {
-                historyLogEl.innerHTML = '<p class="text-center text-gray-500">ยังไม่มีข้อมูล</p>';
-                lastLogStatusEl.textContent = 'ยังไม่มีการบันทึก';
-                return;
-            }
-            
-            const lastLog = appState.history[0];
-            lastLogStatusEl.textContent = `${lastLog.type === 'in' ? 'เข้า' : 'ออก'}โดย ${lastLog.name} (${new Date(lastLog.rawTime).toLocaleTimeString('th-TH')})`;
 
-            historyLogEl.innerHTML = appState.history.map(item => `
-                <div class="bg-gray-700 p-3 rounded-md text-sm flex justify-between items-center">
-                    <div>
-                        <p class="font-semibold">${item.type === 'in' ? '🟢 ลงเวลาเข้า' : '🔴 ลงเวลาออก'}</p>
-                        <p class="text-gray-300 font-bold">${item.name}</p>
-                    </div>
-                    <p class="text-gray-400 text-xs">${item.time}</p>
-                </div>
-            `).join('');
-        }
-
-        function saveState() {
-            localStorage.setItem('checkinAppState', JSON.stringify(appState));
-        }
-
-        function loadState() {
-            const savedState = localStorage.getItem('checkinAppState');
-            if (savedState) { appState = JSON.parse(savedState); }
-        }
-        
-        function handleLogTime(type) {
+        async function handleLogTime(type) {
             const name = nameInput.value.trim();
             if (!name) {
                 nameInput.classList.add('input-invalid');
@@ -231,40 +146,64 @@
                 }, 2000);
                 return;
             }
-            appState.userName = name;
-            const now = new Date();
-            const logEntry = { type: type, name: name, time: now.toLocaleString('th-TH'), rawTime: now.toISOString() };
-            appState.history.unshift(logEntry);
-            saveState();
-            renderHistory();
-        }
-        
-        function requestLocation() {
-            locationStatusEl.textContent = 'กำลังค้นหาตำแหน่ง...';
-            locationStatusEl.classList.remove('text-red-400', 'text-green-400');
-             if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(updateLocationStatus, locationError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
-            } else {
-                locationStatusEl.textContent = "เบราว์เซอร์ไม่รองรับ Geolocation";
+
+            const button = type === 'in' ? checkinBtn : checkoutBtn;
+            setButtonLoading(button, true);
+            errorMessageEl.textContent = '';
+
+            try {
+                const response = await fetch(SCRIPT_URL, {
+                    method: 'POST',
+                    mode: 'no-cors', // Important for Apps Script
+                    cache: 'no-cache',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ name: name, type: type })
+                });
+
+                // Since 'no-cors' mode prevents reading the response, we assume success
+                appState.userName = name;
+                const now = new Date();
+                const logEntry = { type: type, name: name, time: now.toLocaleString('th-TH'), rawTime: now.toISOString() };
+                appState.history.unshift(logEntry);
+                saveState();
+                renderHistory();
+
+            } catch (error) {
+                console.error('Error sending data:', error);
+                errorMessageEl.textContent = 'ส่งข้อมูลไม่สำเร็จ กรุณาลองใหม่';
+            } finally {
+                setButtonLoading(button, false);
             }
         }
+        
+        function requestLocation() { /* ... same as before ... */ }
 
         function init() {
             loadState();
             nameInput.value = appState.userName;
             updateClock();
             setInterval(updateClock, 1000);
-            
             renderHistory();
             updateButtonState();
-
             requestLocation();
-
             nameInput.addEventListener('input', () => { appState.userName = nameInput.value.trim(); saveState(); });
             checkinBtn.addEventListener('click', () => handleLogTime('in'));
             checkoutBtn.addEventListener('click', () => handleLogTime('out'));
             requestPermissionBtn.addEventListener('click', requestLocation);
         }
+        
+        // --- Re-pasting the unchanged functions for completeness ---
+        updateClock = function() { const now = new Date(); currentTimeEl.textContent = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }); currentDateEl.textContent = now.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }); };
+        haversineDistance = function(coords1, coords2) { function toRad(x) { return x * Math.PI / 180; } const R = 6371; const dLat = toRad(coords2.latitude - coords1.latitude); const dLon = toRad(coords2.longitude - coords1.longitude); const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(toRad(coords1.latitude)) * Math.cos(toRad(coords2.latitude)) * Math.sin(dLon / 2) * Math.sin(dLon / 2); const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)); return R * c * 1000; };
+        showPermissionUI = function() { permissionFooter.classList.remove('hidden'); locationStatusEl.textContent = '❌ ถูกปฏิเสธการเข้าถึง'; locationStatusEl.classList.add('text-red-400'); };
+        hidePermissionUI = function() { permissionFooter.classList.add('hidden'); };
+        updateLocationStatus = function(position) { hidePermissionUI(); const userCoords = { latitude: position.coords.latitude, longitude: position.coords.longitude }; const distance = haversineDistance(userCoords, SHOP_LOCATION); distanceStatusEl.textContent = `${distance.toFixed(0)} เมตร`; if (distance <= MAX_DISTANCE_METERS) { appState.isWithinRange = true; locationStatusEl.textContent = `✅ อยู่ในรัศมีที่กำหนด`; locationStatusEl.classList.add('text-green-400'); locationStatusEl.classList.remove('text-red-400'); } else { appState.isWithinRange = false; locationStatusEl.textContent = `❌ อยู่นอกรัศมีที่กำหนด`; locationStatusEl.classList.add('text-red-400'); locationStatusEl.classList.remove('text-green-400'); } updateButtonState(); };
+        locationError = function(error) { appState.isWithinRange = false; distanceStatusEl.textContent = '- เมตร'; if (error.code === error.PERMISSION_DENIED) { showPermissionUI(); } else { locationStatusEl.textContent = 'ไม่สามารถหาตำแหน่งได้'; } updateButtonState(); };
+        updateButtonState = function() { if (appState.isWithinRange) { checkinBtn.disabled = false; checkoutBtn.disabled = false; checkinBtn.classList.remove('btn-disabled'); checkoutBtn.classList.remove('btn-disabled'); checkinBtn.classList.add('bg-cyan-500', 'hover:bg-cyan-600'); checkoutBtn.classList.add('bg-rose-500', 'hover:bg-rose-600'); } else { checkinBtn.disabled = true; checkoutBtn.disabled = true; checkinBtn.classList.add('btn-disabled'); checkoutBtn.classList.add('btn-disabled'); checkinBtn.classList.remove('bg-cyan-500', 'hover:bg-cyan-600'); checkinBtn.classList.remove('bg-rose-500', 'hover:bg-rose-600'); } };
+        renderHistory = function() { if (appState.history.length === 0) { historyLogEl.innerHTML = '<p class="text-center text-gray-500">ยังไม่มีข้อมูล</p>'; lastLogStatusEl.textContent = 'ยังไม่มีการบันทึก'; return; } const lastLog = appState.history[0]; lastLogStatusEl.textContent = `${lastLog.type === 'in' ? 'เข้า' : 'ออก'}โดย ${lastLog.name} (${new Date(lastLog.rawTime).toLocaleTimeString('th-TH')})`; historyLogEl.innerHTML = appState.history.map(item => `<div class="bg-gray-700 p-3 rounded-md text-sm flex justify-between items-center"><div><p class="font-semibold">${item.type === 'in' ? '🟢 ลงเวลาเข้า' : '🔴 ลงเวลาออก'}</p><p class="text-gray-300 font-bold">${item.name}</p></div><p class="text-gray-400 text-xs">${item.time}</p></div>`).join(''); };
+        saveState = function() { localStorage.setItem('checkinAppState', JSON.stringify(appState)); };
+        loadState = function() { const savedState = localStorage.getItem('checkinAppState'); if (savedState) { appState = JSON.parse(savedState); } };
+        requestLocation = function() { locationStatusEl.textContent = 'กำลังค้นหาตำแหน่ง...'; locationStatusEl.classList.remove('text-red-400', 'text-green-400'); if (navigator.geolocation) { navigator.geolocation.getCurrentPosition(updateLocationStatus, locationError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 }); } else { locationStatusEl.textContent = "เบราว์เซอร์ไม่รองรับ Geolocation"; } };
         
         init();
 
