@@ -1,9 +1,9 @@
 // This is a basic service worker for PWA functionality.
 
 const CACHE_NAME = 'check-in-system-cache-v1';
+// *** เปลี่ยนชื่อไฟล์ตรงนี้ให้เป็น index.html ***
 const urlsToCache = [
-  './check-in-system.html' 
-  // In a real app, you would add CSS, JS, and image files here too.
+  './index.html' 
 ];
 
 // Install event: fires when the service worker is first installed.
@@ -18,7 +18,6 @@ self.addEventListener('install', event => {
 });
 
 // Fetch event: fires for every network request.
-// This example serves cached content first (cache-first strategy).
 self.addEventListener('fetch', event => {
   event.respondWith(
     caches.match(event.request)
