@@ -25,14 +25,13 @@
             cursor: not-allowed;
             opacity: 0.7;
         }
-        /* Style for invalid input */
         .input-invalid {
-            border-color: #f43f5e; /* rose-500 */
+            border-color: #f43f5e;
             box-shadow: 0 0 0 2px #f43f5e;
         }
     </style>
 </head>
-<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-between p-4">
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center p-4">
 
     <main class="w-full max-w-md mx-auto text-center flex flex-col items-center justify-center flex-grow">
         <div class="bg-gray-800 p-6 rounded-2xl shadow-lg w-full">
@@ -53,7 +52,7 @@
                 <h2 class="font-semibold text-lg mb-2 border-b border-gray-600 pb-2">สถานะ</h2>
                 <div class="text-sm space-y-2">
                     <p><strong>บันทึกล่าสุด:</strong> <span id="last-log-status" class="font-semibold">ยังไม่มีการบันทึก</span></p>
-                    <p><strong>สถานะตำแหน่ง:</strong> <span id="location-status" class="font-semibold">คุณต้องอนุญาตให้เข้าถึงตำแหน่ง</span></p>
+                    <p><strong>สถานะตำแหน่ง:</strong> <span id="location-status" class="font-semibold">กำลังตรวจสอบ...</span></p>
                     <p><strong>ระยะห่างจากร้าน:</strong> <span id="distance-status" class="font-semibold">- เมตร</span></p>
                 </div>
             </div>
@@ -71,7 +70,7 @@
     </main>
 
     <!-- History Section -->
-    <section class="w-full max-w-md mx-auto mt-8">
+    <section class="w-full max-w-md mx-auto mt-8 mb-4">
         <div class="bg-gray-800 p-4 rounded-2xl shadow-lg w-full">
             <h2 class="text-xl font-bold mb-4 text-center">ประวัติการลงเวลา</h2>
             <div id="history-log" class="space-y-3 max-h-60 overflow-y-auto pr-2">
@@ -80,21 +79,34 @@
         </div>
     </section>
 
+    <!-- Permission Request Footer -->
+    <footer id="permission-footer" class="w-full max-w-md mx-auto text-center hidden">
+        <div class="bg-rose-900 bg-opacity-50 border border-rose-700 text-rose-300 px-4 py-3 rounded-lg" role="alert">
+            <p class="font-bold">ตำแหน่งถูกปิดกั้น</p>
+            <p class="text-sm">โปรดอนุญาตการเข้าถึงตำแหน่งเพื่อใช้งาน หรือกดปุ่มด้านล่างเพื่อขอสิทธิ์อีกครั้ง</p>
+            <button id="request-permission-btn" class="mt-3 bg-rose-500 hover:bg-rose-600 text-white font-bold py-2 px-4 rounded-lg transition-transform transform active:scale-95">
+                ขออนุญาตเข้าถึงตำแหน่ง
+            </button>
+        </div>
+    </footer>
+
     <script>
         // --- Constants and State ---
         const SHOP_LOCATION = { latitude: 18.86408, longitude: 99.12597 }; 
         const MAX_DISTANCE_METERS = 100;
 
         // DOM Elements
-        const currentDateEl = document.getElementById('current-date');
-        const currentTimeEl = document.getElementById('current-time');
         const nameInput = document.getElementById('name-input');
         const checkinBtn = document.getElementById('checkin-btn');
         const checkoutBtn = document.getElementById('checkout-btn');
         const locationStatusEl = document.getElementById('location-status');
-        const lastLogStatusEl = document.getElementById('last-log-status');
         const distanceStatusEl = document.getElementById('distance-status');
         const historyLogEl = document.getElementById('history-log');
+        const lastLogStatusEl = document.getElementById('last-log-status');
+        const currentTimeEl = document.getElementById('current-time');
+        const currentDateEl = document.getElementById('current-date');
+        const permissionFooter = document.getElementById('permission-footer');
+        const requestPermissionBtn = document.getElementById('request-permission-btn');
 
         let appState = {
             userName: '',
@@ -103,34 +115,35 @@
         };
         
         // --- Functions ---
-        function updateClock() { /* ... unchanged ... */ }
-        function haversineDistance(coords1, coords2) { /* ... unchanged ... */ }
-        
         function updateClock() {
             const now = new Date();
-            const timeString = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
-            const dateString = now.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-            currentTimeEl.textContent = timeString;
-            currentDateEl.textContent = dateString;
+            currentTimeEl.textContent = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            currentDateEl.textContent = now.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
         }
 
         function haversineDistance(coords1, coords2) {
             function toRad(x) { return x * Math.PI / 180; }
-            const R = 6371; // Earth radius in km
+            const R = 6371;
             const dLat = toRad(coords2.latitude - coords1.latitude);
             const dLon = toRad(coords2.longitude - coords1.longitude);
-            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                      Math.cos(toRad(coords1.latitude)) * Math.cos(toRad(coords2.latitude)) *
-                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(toRad(coords1.latitude)) * Math.cos(toRad(coords2.latitude)) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-            return R * c * 1000; // convert to meters
+            return R * c * 1000;
         }
         
+        function showPermissionUI() {
+            permissionFooter.classList.remove('hidden');
+            locationStatusEl.textContent = '❌ ถูกปฏิเสธการเข้าถึง';
+            locationStatusEl.classList.add('text-red-400');
+        }
+
+        function hidePermissionUI() {
+            permissionFooter.classList.add('hidden');
+        }
+
         function updateLocationStatus(position) {
-            const userCoords = {
-                latitude: position.coords.latitude,
-                longitude: position.coords.longitude
-            };
+            hidePermissionUI();
+            const userCoords = { latitude: position.coords.latitude, longitude: position.coords.longitude };
             const distance = haversineDistance(userCoords, SHOP_LOCATION);
             distanceStatusEl.textContent = `${distance.toFixed(0)} เมตร`;
 
@@ -148,10 +161,14 @@
             updateButtonState();
         }
 
-        function locationError() {
+        function locationError(error) {
             appState.isWithinRange = false;
-            locationStatusEl.textContent = 'คุณต้องอนุญาตให้เข้าถึงตำแหน่ง';
             distanceStatusEl.textContent = '- เมตร';
+            if (error.code === error.PERMISSION_DENIED) {
+                showPermissionUI();
+            } else {
+                locationStatusEl.textContent = 'ไม่สามารถหาตำแหน่งได้';
+            }
             updateButtonState();
         }
         
@@ -200,9 +217,7 @@
 
         function loadState() {
             const savedState = localStorage.getItem('checkinAppState');
-            if (savedState) {
-                appState = JSON.parse(savedState);
-            }
+            if (savedState) { appState = JSON.parse(savedState); }
         }
         
         function handleLogTime(type) {
@@ -217,18 +232,21 @@
                 return;
             }
             appState.userName = name;
-
             const now = new Date();
-            const logEntry = { 
-                type: type, 
-                name: name,
-                time: now.toLocaleString('th-TH'),
-                rawTime: now.toISOString()
-            };
+            const logEntry = { type: type, name: name, time: now.toLocaleString('th-TH'), rawTime: now.toISOString() };
             appState.history.unshift(logEntry);
-
             saveState();
             renderHistory();
+        }
+        
+        function requestLocation() {
+            locationStatusEl.textContent = 'กำลังค้นหาตำแหน่ง...';
+            locationStatusEl.classList.remove('text-red-400', 'text-green-400');
+             if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(updateLocationStatus, locationError, { enableHighAccuracy: true, timeout: 10000, maximumAge: 0 });
+            } else {
+                locationStatusEl.textContent = "เบราว์เซอร์ไม่รองรับ Geolocation";
+            }
         }
 
         function init() {
@@ -236,28 +254,25 @@
             nameInput.value = appState.userName;
             updateClock();
             setInterval(updateClock, 1000);
-
-            if (navigator.geolocation) {
-                locationStatusEl.textContent = 'กำลังค้นหาตำแหน่ง...';
-                navigator.geolocation.watchPosition(updateLocationStatus, locationError, { enableHighAccuracy: true });
-            } else {
-                locationStatusEl.textContent = "เบราว์เซอร์ไม่รองรับ Geolocation";
-            }
             
             renderHistory();
             updateButtonState();
 
-            nameInput.addEventListener('input', () => {
-                appState.userName = nameInput.value.trim();
-                saveState();
-            });
+            requestLocation();
+
+            nameInput.addEventListener('input', () => { appState.userName = nameInput.value.trim(); saveState(); });
             checkinBtn.addEventListener('click', () => handleLogTime('in'));
             checkoutBtn.addEventListener('click', () => handleLogTime('out'));
+            requestPermissionBtn.addEventListener('click', requestLocation);
         }
         
         init();
 
-        if ('serviceWorker' in navigator) { /* ... unchanged ... */ }
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js').then(reg => console.log('SW registered.')).catch(err => console.log('SW registration failed:', err));
+            });
+        }
     </script>
 </body>
 </html>
