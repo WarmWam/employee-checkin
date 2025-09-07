@@ -1,0 +1,21 @@
+{
+  "name": "ระบบลงเวลาเข้า-ออกงาน",
+  "short_name": "ลงเวลา",
+  "start_url": ".",
+  "display": "standalone",
+  "background_color": "#111827",
+  "theme_color": "#22d3ee",
+  "orientation": "portrait-primary",
+  "icons": [
+    {
+      "src": "https://placehold.co/192x192/22d3ee/111827?text=ลงเวลา",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://placehold.co/512x512/22d3ee/111827?text=ลงเวลา",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ]
+}

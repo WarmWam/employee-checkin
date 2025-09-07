@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบลงเวลาเข้า-ออกงาน</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- PWA Manifest Link -->
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#22d3ee">
+
+    <style>
+        body {
+            font-family: 'Sarabun', 'Inter', sans-serif;
+            -webkit-tap-highlight-color: transparent;
+        }
+        .digital-clock {
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-disabled {
+            background-color: #4b5563; /* gray-600 */
+            cursor: not-allowed;
+            opacity: 0.7;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-white min-h-screen flex flex-col items-center justify-between p-4">
+
+    <!-- Main Content -->
+    <main class="w-full max-w-md mx-auto text-center flex flex-col items-center justify-center flex-grow">
+        <div class="bg-gray-800 p-6 rounded-2xl shadow-lg w-full">
+            <!-- Clock -->
+            <div class="mb-6">
+                <h1 id="current-time" class="text-6xl md:text-7xl font-bold digital-clock text-cyan-400">00:00:00</h1>
+                <p id="current-date" class="text-lg text-gray-400 mt-2">กำลังโหลดวันที่...</p>
+            </div>
+
+            <!-- Status -->
+            <div id="status-card" class="bg-gray-700 p-4 rounded-lg mb-6 text-left">
+                <h2 class="font-semibold text-lg mb-2 border-b border-gray-600 pb-2">สถานะ</h2>
+                <div class="text-sm space-y-2">
+                    <p><strong>สถานะการลงเวลา:</strong> <span id="checkin-status" class="font-semibold">ยังไม่ได้ลงเวลาเข้า</span></p>
+                    <p><strong>สถานะตำแหน่ง:</strong> <span id="location-status" class="font-semibold">คุณต้องอนุญาตให้เข้าถึงตำแหน่ง</span></p>
+                    <p><strong>ระยะห่างจากร้าน:</strong> <span id="distance-status" class="font-semibold">- เมตร</span></p>
+                </div>
+            </div>
+
+            <!-- Action Buttons -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <button id="checkin-btn" class="w-full text-lg font-bold py-4 px-6 rounded-lg transition-transform transform active:scale-95 btn-disabled" disabled>
+                    ลงเวลาเข้า
+                </button>
+                <button id="checkout-btn" class="w-full text-lg font-bold py-4 px-6 rounded-lg transition-transform transform active:scale-95 btn-disabled" disabled>
+                    ลงเวลาออก
+                </button>
+            </div>
+        </div>
+    </main>
+
+    <!-- History Section -->
+    <section class="w-full max-w-md mx-auto mt-8">
+        <div class="bg-gray-800 p-4 rounded-2xl shadow-lg w-full">
+            <h2 class="text-xl font-bold mb-4 text-center">ประวัติการลงเวลา</h2>
+            <div id="history-log" class="space-y-3 max-h-60 overflow-y-auto pr-2">
+                <!-- History items will be injected here -->
+                <p class="text-center text-gray-500">ยังไม่มีข้อมูล</p>
+            </div>
+        </div>
+    </section>
+
+
+    <script>
+        // --- Constants and State ---
+
+        // พิกัดร้านค้าจากที่คุณระบุ: 18°51'50.7"N 99°07'33.5"E
+        const SHOP_LOCATION = { latitude: 18.86408, longitude: 99.12597 }; 
+        const MAX_DISTANCE_METERS = 100; // ระยะห่างสูงสุดที่อนุญาต (เมตร)
+
+        // DOM Elements
+        const currentDateEl = document.getElementById('current-date');
+        const currentTimeEl = document.getElementById('current-time');
+        const checkinBtn = document.getElementById('checkin-btn');
+        const checkoutBtn = document.getElementById('checkout-btn');
+        const locationStatusEl = document.getElementById('location-status');
+        const checkinStatusEl = document.getElementById('checkin-status');
+        const distanceStatusEl = document.getElementById('distance-status');
+        const historyLogEl = document.getElementById('history-log');
+
+        let appState = {
+            isCheckedIn: false,
+            checkInTime: null,
+            isLocationAllowed: false,
+            isWithinRange: false,
+            history: []
+        };
+        
+        // --- Functions ---
+
+        function updateClock() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false });
+            const dateString = now.toLocaleDateString('th-TH', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+            currentTimeEl.textContent = timeString;
+            currentDateEl.textContent = dateString;
+        }
+
+        function haversineDistance(coords1, coords2) {
+            function toRad(x) { return x * Math.PI / 180; }
+            const R = 6371; // Earth radius in km
+            const dLat = toRad(coords2.latitude - coords1.latitude);
+            const dLon = toRad(coords2.longitude - coords1.longitude);
+            const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                      Math.cos(toRad(coords1.latitude)) * Math.cos(toRad(coords2.latitude)) *
+                      Math.sin(dLon / 2) * Math.sin(dLon / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            return R * c * 1000; // convert to meters
+        }
+
+        function updateLocationStatus(position) {
+            appState.isLocationAllowed = true;
+            const userCoords = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+            };
+            
+            const distance = haversineDistance(userCoords, SHOP_LOCATION);
+            distanceStatusEl.textContent = `${distance.toFixed(0)} เมตร`;
+
+            if (distance <= MAX_DISTANCE_METERS) {
+                appState.isWithinRange = true;
+                locationStatusEl.textContent = `✅ อยู่ในรัศมีที่กำหนด`;
+                locationStatusEl.classList.add('text-green-400');
+                locationStatusEl.classList.remove('text-red-400');
+            } else {
+                appState.isWithinRange = false;
+                locationStatusEl.textContent = `❌ อยู่นอกรัศมีที่กำหนด`;
+                locationStatusEl.classList.add('text-red-400');
+                locationStatusEl.classList.remove('text-green-400');
+            }
+            updateButtonState();
+        }
+
+        function locationError() {
+            appState.isLocationAllowed = false;
+            appState.isWithinRange = false;
+            locationStatusEl.textContent = 'คุณต้องอนุญาตให้เข้าถึงตำแหน่ง';
+            distanceStatusEl.textContent = '- เมตร';
+            updateButtonState();
+        }
+        
+        function updateButtonState() {
+            // Check-in button logic
+            if (!appState.isCheckedIn && appState.isWithinRange) {
+                checkinBtn.disabled = false;
+                checkinBtn.classList.remove('btn-disabled');
+                checkinBtn.classList.add('bg-cyan-500', 'hover:bg-cyan-600');
+            } else {
+                checkinBtn.disabled = true;
+                checkinBtn.classList.add('btn-disabled');
+                checkinBtn.classList.remove('bg-cyan-500', 'hover:bg-cyan-600');
+            }
+
+            // Check-out button logic
+            if (appState.isCheckedIn && appState.isWithinRange) {
+                checkoutBtn.disabled = false;
+                checkoutBtn.classList.remove('btn-disabled');
+                checkoutBtn.classList.add('bg-rose-500', 'hover:bg-rose-600');
+            } else {
+                checkoutBtn.disabled = true;
+                checkoutBtn.classList.add('btn-disabled');
+                checkoutBtn.classList.remove('bg-rose-500', 'hover:bg-rose-600');
+            }
+        }
+        
+        function renderHistory() {
+            if (appState.history.length === 0) {
+                historyLogEl.innerHTML = '<p class="text-center text-gray-500">ยังไม่มีข้อมูล</p>';
+                return;
+            }
+            historyLogEl.innerHTML = appState.history.map(item => `
+                <div class="bg-gray-700 p-3 rounded-md text-sm">
+                    <p class="font-semibold">${item.type === 'in' ? '🟢 ลงเวลาเข้า' : '🔴 ลงเวลาออก'}</p>
+                    <p class="text-gray-400">${item.time}</p>
+                </div>
+            `).join('');
+        }
+
+        function saveState() {
+            localStorage.setItem('checkinAppState', JSON.stringify(appState));
+        }
+
+        function loadState() {
+            const savedState = localStorage.getItem('checkinAppState');
+            if (savedState) {
+                appState = JSON.parse(savedState);
+            }
+        }
+        
+        function handleCheckIn() {
+            const now = new Date();
+            appState.isCheckedIn = true;
+            appState.checkInTime = now.toISOString();
+            
+            const logEntry = { type: 'in', time: now.toLocaleString('th-TH') };
+            appState.history.unshift(logEntry); // Add to beginning of array
+
+            checkinStatusEl.textContent = `เข้างานเมื่อ ${now.toLocaleTimeString('th-TH')}`;
+            
+            saveState();
+            updateButtonState();
+            renderHistory();
+        }
+
+        function handleCheckOut() {
+            const now = new Date();
+            appState.isCheckedIn = false;
+            appState.checkInTime = null;
+
+            const logEntry = { type: 'out', time: now.toLocaleString('th-TH') };
+            appState.history.unshift(logEntry);
+
+            checkinStatusEl.textContent = 'ยังไม่ได้ลงเวลาเข้า';
+            
+            saveState();
+            updateButtonState();
+            renderHistory();
+        }
+
+        function init() {
+            loadState();
+            updateClock();
+            setInterval(updateClock, 1000);
+
+            if (navigator.geolocation) {
+                locationStatusEl.textContent = 'กำลังค้นหาตำแหน่ง...';
+                navigator.geolocation.watchPosition(updateLocationStatus, locationError, {
+                    enableHighAccuracy: true,
+                    timeout: 10000,
+                    maximumAge: 0
+                });
+            } else {
+                locationStatusEl.textContent = "เบราว์เซอร์ไม่รองรับ Geolocation";
+            }
+            
+            if (appState.isCheckedIn) {
+                 const checkInDate = new Date(appState.checkInTime);
+                 checkinStatusEl.textContent = `เข้างานเมื่อ ${checkInDate.toLocaleTimeString('th-TH')}`;
+            }
+
+            renderHistory();
+            updateButtonState();
+
+            checkinBtn.addEventListener('click', handleCheckIn);
+            checkoutBtn.addEventListener('click', handleCheckOut);
+        }
+        
+        init();
+
+        // --- PWA Service Worker Registration ---
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('./sw.js')
+                    .then(registration => {
+                        console.log('ServiceWorker registration successful with scope: ', registration.scope);
+                    })
+                    .catch(err => {
+                        console.log('ServiceWorker registration failed: ', err);
+                    });
+            });
+        }
+    </script>
+</body>
+</html>
+
